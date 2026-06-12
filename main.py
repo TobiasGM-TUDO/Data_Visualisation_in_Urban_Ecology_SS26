@@ -1,9 +1,35 @@
 # folium docs: https://python-visualization.github.io/folium/latest/index.html
 import pandas as pd
 import folium
+import pathlib as pl
+import os
+
+## Constants
+IBUTTON_PARENT_DIRECTORY = r"Data for students/iButton data"
+
+## Function / Class Definitions
+def fix_ibutton_format(raw_data:str):
+    raw_data = raw_data.replace("Date/Time,Unit,Value","Date,Time,Unit,Value")
+    raw_data
+    return raw_data
+
+class IButton:
+    def __init__(self, path_to_csv:pl.Path):
+        self.path_to_csv = path_to_csv
+        self.df = pd.read_csv(path_to_csv, skiprows=18)
+
 
 ## Sensor Data
-sensor_location = pd.read_excel("Data for students/nestbox_coordinates.xlsx")
+# Sensor stuff
+
+for dirpath, dirnames, filenames in os.walk(IBUTTON_PARENT_DIRECTORY):
+    for filename in filenames:
+        file_path = pl.Path(os.path.join(dirpath, filename))
+        data = IButton(file_path).df
+        print(data)
+
+# Map stuff
+sensor_location = pd.read_excel("nestbox_coordinates.xlsx")
 
 ## Map Stuff
 # Bounding box for relevant map section of TU Dortmund
