@@ -73,7 +73,7 @@ def sensor_on_click_popup_html(sensor_metadata):
         Height: {sensor_metadata.height_cm} cm<br>
         Orientation: {sensor_metadata.orientation}<br>
         Coordinates: {sensor_metadata.lat}, {sensor_metadata.lon}<br>
-        Species: BT
+        Species: {sensor_metadata.species}
     </div>
     """
 
