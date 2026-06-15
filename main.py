@@ -73,6 +73,7 @@ def sensor_on_click_popup_html(sensor_metadata):
         Height: {sensor_metadata.height_cm} cm<br>
         Orientation: {sensor_metadata.orientation}<br>
         Coordinates: {sensor_metadata.lat}, {sensor_metadata.lon}<br>
+        Species: BT
     </div>
     """
 
@@ -88,8 +89,8 @@ sensor_location["sensor_type"] = sensor_location["sensor_type"].fillna("Only Nes
 
 ## Map Stuff
 # Bounding box for relevant map section of TU Dortmund
-min_lon, max_lon = 7.40, 7.43
-min_lat, max_lat =51.48, 51.5
+min_lon, max_lon = 7.3928, 7.4372
+min_lat, max_lat = 51.4755, 51.5045
 
 tu_map = folium.Map(
     max_bounds=True,
