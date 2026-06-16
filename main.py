@@ -66,9 +66,17 @@ def aggregate_ibutton_files(ibutton_parent_directory:pl.Path):
     ibutton_data_total.to_csv("iButton_measurements.csv", index=False)
 
 def sensor_on_click_popup_html(sensor_metadata):
+    # bg_color = "rgba(150, 150, 150, 0.15)"
+    # if "BT" in sensor_metadata.species:
+    #     bg_color = "rgba(0, 0, 255, 0.2)"
+    # elif "GT" in sensor_metadata.species:
+    #     bg_color = "rgba(50, 50, 50, 0.2)"
+    bg_color = "rgba(99, 154, 0, 0)"
+    header_bg_color = "rgba(125, 125, 125, 0)"#"rgba(125, 125, 125, 0.25)"
+
     return f"""
-    <div style="font-family: sans-serif; font-size: 12px;">
-        <b>Nestbox {sensor_metadata.nestbox_id}</b><br>
+    <div style="font-family: sans-serif; font-size: 12px; padding: 0px;background: {bg_color}; border: 1px solid rgba(0,0,0,0.5);">
+        <p style="text-align: center; margin: 0; background: {bg_color}; border-bottom: 1px solid rgba(0,0,0,0.5);"><b>Nestbox {sensor_metadata.nestbox_id}</b><br></p>
         Type: {sensor_metadata.sensor_type}<br>
         Height: {sensor_metadata.height_cm} cm<br>
         Orientation: {sensor_metadata.orientation}<br>
@@ -86,6 +94,8 @@ iButton_data = pd.read_csv("iButton_measurements.csv")
 # Map stuff
 sensor_location = pd.read_excel("nestbox_coordinates.xlsx")
 sensor_location["sensor_type"] = sensor_location["sensor_type"].fillna("Only Nest")
+sensor_location["species"] = sensor_location["species"].fillna("Unknown")
+
 
 ## Map Stuff
 # Bounding box for relevant map section of TU Dortmund
@@ -107,6 +117,32 @@ tu_map = folium.Map(
 # folium.CircleMarker([min_lat, min_lon], tooltip=f"Lower Left Corner {[min_lat, min_lon]}").add_to(tu_map)
 # folium.CircleMarker([min_lat, max_lon], tooltip=f"Lower Right Corner {[min_lat, max_lon]}").add_to(tu_map)
 # folium.CircleMarker([max_lat, max_lon], tooltip=f"Upper Right Corner {[max_lat, max_lon]}").add_to(tu_map)
+
+# Changes the default CSS
+# TU Green: rgba(99, 154, 0, 1)
+# TU Accent Orange: rgba(202, 116, 6, 1)
+# css_markers = """
+# <style>
+# .leaflet-tooltip {
+#     background: rgba(195, 195, 195, 0.3) !important;
+#     backdrop-filter: blur(5px) !important;
+#     -webkit-backdrop-filter: blur(5px) !important;
+#     border: none !important;
+#     box-shadow: none !important;
+#     padding: 0 !important;
+#
+# }
+# .leaflet-tooltip-left::before,
+# .leaflet-tooltip-right::before,
+# .leaflet-tooltip-top::before,
+# .leaflet-tooltip-bottom::before {
+#     border: none !important;
+#     display: none !important;
+# }
+# </style>
+# """
+#
+# tu_map.get_root().header.add_child(folium.Element(css_markers))
 
 # Draw sensors
 for sensor in sensor_location.itertuples():
