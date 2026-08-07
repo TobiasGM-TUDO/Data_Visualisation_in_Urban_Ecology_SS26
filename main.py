@@ -92,7 +92,7 @@ iButton_data = pd.read_csv("iButton_measurements.csv")
 
 
 # Map stuff
-sensor_location = pd.read_excel("nestbox_coordinates.xlsx")
+sensor_location = pd.read_excel("nestbox_coordinates.xlsx") # Todo update file with new data (and updates rotation for at least one sensor)
 sensor_location["sensor_type"] = sensor_location["sensor_type"].fillna("Only Nest")
 sensor_location["species"] = sensor_location["species"].fillna("Unknown")
 
