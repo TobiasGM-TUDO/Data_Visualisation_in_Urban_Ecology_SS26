@@ -5,6 +5,7 @@ import pathlib as pl
 import os
 import io
 import re
+from folium.plugins import FloatImage, GroupedLayerControl, MeasureControl, MousePosition, Search, TagFilterButton
 
 ## Constants
 IBUTTON_PARENT_DIRECTORY = r"Data for students/iButton data"
@@ -15,15 +16,37 @@ class IButton:
     def __init__(self, path_to_csv:pl.Path):
         self.path_to_csv = path_to_csv
         # Determine sensor ID
-        id_and_variable = self.path_to_csv.stem.split("_")[0]
-        self.id = "".join([character for character in id_and_variable if character.isnumeric()])
-        self.variable = "".join([character for character in id_and_variable if not character.isnumeric()])
+        id_and_variable = self.path_to_csv.stem.split("_")
+        if len(id_and_variable) <= 2:
+            id_and_variable = id_and_variable[0].upper()
+        else:
+            id_and_variable = "".join([substring for substring in id_and_variable if substring.lower() != ".csv"]).replace("inside", "I").replace("outside", "O").upper()
+            if len(id_and_variable) > 4:
+                if "-" in id_and_variable:
+                    id_and_variable = id_and_variable.split("-")[0]
+                    id_and_variable = id_and_variable[:-8]
+        if " " in self.path_to_csv.stem:
+            id_and_variable = id_and_variable.split(" ")
+            id_and_variable = [substring for substring in id_and_variable if "." not in substring]
+            id_and_variable = "".join(id_and_variable)
 
-        # Read the .CSV data
-        self.df = pd.read_csv(io.StringIO(self.fix_ibutton_format(path_to_csv)), skiprows=18, decimal=",", delimiter=",")
-        # Add sensor ID and variable type (HI, HO, TI, TO) to the data frame
-        self.df["Id"] = self.id
-        self.df["Variable"] = self.variable
+        # Alert entries with empty variable
+        if len(id_and_variable) < 3 or  len(id_and_variable) > 4:
+            print(f"Unparsable ID/Variable: {self.path_to_csv}", id_and_variable)
+            self.id = None
+            self.variable = None
+            self.df = None
+        else:
+            self.id = "".join([character for character in id_and_variable if character.isnumeric()])
+            # Correct variable order and save it alongside the id
+            self.variable = "".join([character for character in id_and_variable if not character.isnumeric()])
+            self.variable = self.variable.replace("IT", "TI").replace("OT", "TO").replace("IH", "HI").replace("OH", "HO")
+
+            # Read the .CSV data
+            self.df = pd.read_csv(io.StringIO(self.fix_ibutton_format(path_to_csv)), skiprows=18, decimal=",", delimiter=",")
+            # Add sensor ID and variable type (HI, HO, TI, TO) to the data frame
+            self.df["Id"] = self.id
+            self.df["Variable"] = self.variable
 
     def fix_ibutton_format(self, path_to_csv:pl.Path):
         with open(path_to_csv) as csv_file:
@@ -46,6 +69,12 @@ class IButton:
 
         return "".join(csv_file_data_out)
 
+class NestCheckData:
+    def __init__(self, path_to_excl: pl.Path):
+        self.path_to_excl = path_to_excl
+        self.df = pd.read_excel(self.path_to_excl)
+        print(self.df)
+
 def aggregate_ibutton_files(ibutton_parent_directory:pl.Path):
     """Aggregate data from iButton files into one data frame and save to csv"""
     ibutton_data_total = pd.DataFrame(columns=["Id", "Variable", "Date", "Time", "Unit", "Value"])
@@ -54,6 +83,7 @@ def aggregate_ibutton_files(ibutton_parent_directory:pl.Path):
             file_path = pl.Path(os.path.join(dirpath, filename))
             ibutton = IButton(file_path)
             ibutton_data = ibutton.df
+            if not ibutton.id: continue
 
             if len(ibutton_data.columns) != 6:
                 print("Data frame with wrong size!")
@@ -85,6 +115,11 @@ def sensor_on_click_popup_html(sensor_metadata):
     </div>
     """
 
+## Nest check data
+for year in [2024, 2025, 2026]:
+    nest_check_data_file_path = list(pl.Path("./").rglob(f"{str(year)}*[Nn]est*[Cc]hecks*.xlsx"))[0]
+
+
 ## Sensor Data
 # Sensor stuff
 #aggregate_ibutton_files(pl.Path(IBUTTON_PARENT_DIRECTORY))
@@ -99,10 +134,12 @@ sensor_location["species"] = sensor_location["species"].fillna("Unknown")
 
 ## Map Stuff
 # Bounding box for relevant map section of TU Dortmund
-min_lon, max_lon = 7.3928, 7.4372
+min_lon, max_lon = 7.352, 7.47
 min_lat, max_lat = 51.4755, 51.5045
 
+# The actual map object
 tu_map = folium.Map(
+    tiles=None,
     max_bounds=True,
     location=[51.4921758, 7.4141904],
     zoom_start=16,
@@ -112,11 +149,22 @@ tu_map = folium.Map(
     max_lon=max_lon,
 )
 
+# Tile sets for the map
+for tileset in ["CartoDB Positron", "Cartodb dark_matter", "OpenStreetMap"]:
+    folium.TileLayer(
+        tiles=tileset,
+        referrer_policy="strict-origin-when-cross-origin",
+    ).add_to(tu_map)
+
+# Add a little TU Dortmund logo
+url = "Logo_tud_logo_pantone_EN_kurz_VAR2_RGB.svg"
+FloatImage(url, bottom=93, left=84, width='250px').add_to(tu_map) # left=89.5
+
 ## For debugging. Enable when map bounding box should be visible.
-# folium.CircleMarker([max_lat, min_lon], tooltip=f"Upper Left Corner {[max_lat, min_lon]}").add_to(tu_map)
-# folium.CircleMarker([min_lat, min_lon], tooltip=f"Lower Left Corner {[min_lat, min_lon]}").add_to(tu_map)
-# folium.CircleMarker([min_lat, max_lon], tooltip=f"Lower Right Corner {[min_lat, max_lon]}").add_to(tu_map)
-# folium.CircleMarker([max_lat, max_lon], tooltip=f"Upper Right Corner {[max_lat, max_lon]}").add_to(tu_map)
+#folium.CircleMarker([max_lat, min_lon], tooltip=f"Upper Left Corner {[max_lat, min_lon]}").add_to(tu_map)
+#folium.CircleMarker([min_lat, min_lon], tooltip=f"Lower Left Corner {[min_lat, min_lon]}").add_to(tu_map)
+#folium.CircleMarker([min_lat, max_lon], tooltip=f"Lower Right Corner {[min_lat, max_lon]}").add_to(tu_map)
+#folium.CircleMarker([max_lat, max_lon], tooltip=f"Upper Right Corner {[max_lat, max_lon]}").add_to(tu_map)
 
 # Changes the default CSS
 # TU Green: rgba(99, 154, 0, 1)
@@ -145,18 +193,66 @@ tu_map = folium.Map(
 # tu_map.get_root().header.add_child(folium.Element(css_markers))
 
 # Draw sensors
-for sensor in sensor_location.itertuples():
-    sensor_rot_number = int(sensor.orientation.replace("N","").replace("E","").replace("S","").replace("W",""))
-    sensor_rot_text = sensor.orientation
-    sensor_lon = sensor.lon
-    sensor_lat = sensor.lat
-    sensor_type = sensor.sensor_type
-    sensor_id = sensor.nestbox_id
+years = []
+sensor_types = ["iButton", "Intelligent","Only Nest"]
+for year in [2024,2025,2026]:
+    year_group = folium.FeatureGroup(name=str(year))
+    year_group.add_to(tu_map)
+    years.append(year_group)
 
-    kw = {"prefix": "fa", "color": "green", "icon": "arrow-up"}
-    icon = folium.Icon(angle=sensor_rot_number, **kw)
-    tooltip = folium.Tooltip(sensor_on_click_popup_html(sensor), sticky=True)
-    folium.Marker(location=[sensor_lat, sensor_lon], icon=icon, tooltip=tooltip).add_to(tu_map)
+    for sensor in sensor_location.itertuples():
+        sensor_rot_number = int(sensor.orientation.replace("N","").replace("E","").replace("S","").replace("W",""))
+        sensor_rot_text = sensor.orientation
+        sensor_lon = sensor.lon
+        sensor_lat = sensor.lat
+        sensor_type = sensor.sensor_type
+        sensor_id = sensor.nestbox_id
+
+        kw = {"prefix": "fa", "color": "green", "icon": "arrow-up"}
+        tooltip = folium.Tooltip(sensor_on_click_popup_html(sensor), sticky=True)
+        icon = folium.Icon(angle=sensor_rot_number, **kw)
+        # icon = folium.DivIcon(
+        #     html=
+        #     '<div style="display:flex;align-items:center;gap:5px;white-space:nowrap">'
+        #      '<i class="fa fa-flask" style="font-size:16px;color:#c0392b"></i>'
+        #      '<span style="font:600 12px sans-serif;color:#222;'
+        #      'background:rgba(255,255,255,.85);padding:1px 4px;border-radius:2px">'
+        #      'Nest 21</span></div>')
+        folium.Marker(location=[sensor_lat, sensor_lon],
+                      icon=icon,
+                      tooltip=tooltip,
+                      lazy=True,
+                      title=sensor_id+f" ({sensor_type})",
+                      tags=[sensor_type]
+                      ).add_to(year_group)
+
+# Adds a layer control UI element
+GroupedLayerControl(groups={"Year": years}, exclusive_groups=True).add_to(tu_map)
+folium.LayerControl(collapsed=False).add_to(tu_map)
+
+# Adds a full screen button
+folium.plugins.Fullscreen(
+    position="topright",
+    title="Fullscreen",
+    title_cancel="Exit fullscreen",
+    force_separate_button=True,
+).add_to(tu_map)
+
+# Measurement tool
+MeasureControl(
+    primary_length_unit="meters",
+    secondary_length_unit="kilometers",
+    primary_area_unit="sqmeters",
+).add_to(tu_map)
+
+# Enables a display of lon/lat of the cursor's positon in the bottom right corner
+# MousePosition().add_to(tu_map)
+
+# Search bar for markers
+Search(year_group, search_label="title", placeholder="Search for nestbox by ID or type").add_to(tu_map)
+
+# Tag filter button
+TagFilterButton(sensor_types).add_to(tu_map) #Fixme: Counts sensors that are for other years too
 
 # Save map
 tu_map.save('map.html')
