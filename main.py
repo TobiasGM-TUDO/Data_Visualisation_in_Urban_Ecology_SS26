@@ -1,5 +1,6 @@
 # folium docs: https://python-visualization.github.io/folium/latest/index.html
 import pandas as pd
+import numpy as np
 import folium
 import pathlib as pl
 import os
@@ -11,6 +12,12 @@ from folium.plugins import FloatImage, GroupedLayerControl, MeasureControl, Mous
 IBUTTON_PARENT_DIRECTORY = r"Data for students/iButton data"
 
 ## Function / Class Definitions
+
+class Nestbox:
+    def __init__(self, ID:str, nestbox_df:pd.DataFrame):
+        self.ID = ID
+        self.df = nestbox_df.loc[self.ID]
+
 
 class IButton:
     def __init__(self, path_to_csv:pl.Path):
@@ -69,11 +76,6 @@ class IButton:
 
         return "".join(csv_file_data_out)
 
-class NestCheckData:
-    def __init__(self, path_to_excl: pl.Path):
-        self.path_to_excl = path_to_excl
-        self.df = pd.read_excel(self.path_to_excl)
-        print(self.df)
 
 def aggregate_ibutton_files(ibutton_parent_directory:pl.Path):
     """Aggregate data from iButton files into one data frame and save to csv"""
@@ -115,10 +117,199 @@ def sensor_on_click_popup_html(sensor_metadata):
     </div>
     """
 
-## Nest check data
-for year in [2024, 2025, 2026]:
-    nest_check_data_file_path = list(pl.Path("./").rglob(f"{str(year)}*[Nn]est*[Cc]hecks*.xlsx"))[0]
+def aggregate_nestbox_data(nestbox_data_parent_dir:pl.Path):
+    """
+    Creates a .csv file containing all the important nestbox data from 2024-2026
 
+    :param nestbox_data_parent_dir:
+    :return: nothing
+    """
+    excel_paths = list(nestbox_data_parent_dir.rglob(f"*[Nn]est*[Cc]hecks*.xlsx"))
+
+    df_target = pd.DataFrame(columns=["Year", "ID", "Type", "Lat", "Lon", "Species_1", "Species_2", "Height", "Orientation", "Eggs", "Chicks", "Deaths"])
+    for file_path in excel_paths:
+        data_year = str(file_path.stem).split(" ")[0]
+        # Check if the year could be extracted from the name
+        if "~" in file_path.stem: continue #<- Skips temp. copies of opened Excel files
+        if not data_year.isnumeric() and type(data_year) != int:
+            print(f"Year for file {file_path} could not be determined! Skipping...")
+            continue
+
+        df_source = pd.read_excel(file_path, index_col=False, header=None)
+        df_target_per_year = pd.DataFrame(columns=df_target.columns)
+
+        if int(data_year) == 2024:
+            df_header = df_source.drop(range(13, len(df_source))).transpose()
+            df_header = df_header.rename(columns=df_header.iloc[0]).drop(df_header.index[0]).head(73)
+
+            df_target_per_year["ID"] = df_header["New Nest ID"]
+            df_target_per_year["Species_1"] = df_header["Species"]
+            df_target_per_year["Species_2"] = df_header["Second brood"]
+            df_target_per_year["Height"] = df_header["Height (cm)"]
+            df_target_per_year["Orientation"] = df_header["Orientation"]
+
+
+            # Drops all rows that don't have an ID (1 nestbox in the original dataset for 2024)
+            df_target_per_year = df_target_per_year.dropna(subset=["ID"])
+
+            # Sorts the rows by ID
+            df_target_per_year = df_target_per_year.sort_values(by=["ID"], ascending=True)
+
+            # Sets the nest type
+            df_target_per_year["Type"] = df_header["iButton"].str.replace("x", "iButton").fillna("Nest")
+
+            df_nest_data = df_source.drop(range(0, 13)).rename(columns=df_source.iloc[11])
+            for ID in df_nest_data.columns:
+                if "Nest ID" in str(ID): continue
+                if not ID or str(ID).lower() == "nan": continue
+                nest_data = df_nest_data[ID]
+
+                # Determines the max. amount of chicks found in a nest
+                chicks = nest_data[nest_data.str.contains("Chick", case=False, na=False)].tolist()
+                if not chicks:
+                    chicks = 0
+                else:
+                    CHICK_RE = re.compile(r"(\d+)\s*chicks?\b", re.IGNORECASE)
+                    chicks = [int(n) for entry in chicks for n in CHICK_RE.findall(str(entry))]
+                    if not chicks:
+                        chicks = np.nan
+                    else:
+                        chicks = max(chicks)
+                df_target_per_year.loc[df_target_per_year["ID"] == ID, "Chicks"] = chicks
+
+                # Determines the max. amount of eggs found in a nest
+                eggs = nest_data[nest_data.str.contains("CC|CU|WU", case=False, na=False, regex=True)].tolist()
+                if not eggs:
+                    eggs = 0
+                else:
+                    EGG_RE = re.compile(r"(\d+)\s*(?:CC|CU|WU)\b", re.IGNORECASE)
+                    eggs = [int(n) for entry in nest_data.dropna() for n in EGG_RE.findall(str(entry))]
+                    if not eggs:
+                        eggs = np.nan
+                    else:
+                        eggs = max(eggs)
+                df_target_per_year.loc[df_target_per_year["ID"] == ID, "Eggs"] = eggs
+
+                # Determines the max. amount od deaths
+                deaths = nest_data[nest_data.str.contains(r"dead\b(?!\s*eggs?\b)", case=False, na=False, regex=True)].tolist()
+                if not deaths:
+                    deaths = 0
+                else:
+                    DEAD_EGG_RE = re.compile(r"dead\s*eggs?", re.IGNORECASE)
+                    DEAD_RE = re.compile(r"(\d+)\s*(?:dead\b|chicks?\s+dead\b)", re.IGNORECASE)
+
+                    deaths = [int(n) for entry in deaths for n in DEAD_RE.findall(str(entry))]
+                    if not deaths:
+                        deaths = np.nan
+                    else:
+                        deaths = max(deaths)
+                df_target_per_year.loc[df_target_per_year["ID"] == ID, "Deaths"] = deaths
+
+        elif 2025 <= int(data_year) <= 2026:
+            df_header = df_source.drop(range(7, len(df_source))).transpose()
+            df_header = df_header.rename(columns=df_header.iloc[0]).drop(df_header.index[0])
+
+            df_target_per_year["ID"] = df_header["Date/NestID"]
+            df_target_per_year["Species_1"] = df_header["Species"]
+            if int(data_year) == 2026:
+                df_target_per_year["Species_2"] = df_header["Species 2nd brood"]
+            else:
+                df_target_per_year["Species_2"] = None
+            df_target_per_year["Height"] = df_header["Height (cm)"]
+            df_target_per_year["Orientation"] = df_header["Orientation"]
+
+            # Sets the nest type
+            df_target_per_year["Type"] = df_header["iButton"].str.replace("x", "iButton").fillna("Nest")
+            df_target_per_year.loc[df_target_per_year["ID"].str.startswith("S", na=False), "Type"] = "Intelligent"
+
+            df_nest_data = df_source.drop(range(0, 7)).rename(columns=df_source.iloc[6])
+            for ID in df_nest_data.columns:
+                if "Date" in str(ID): continue
+                nest_data = df_nest_data[ID]
+
+                # Determines the max. amount of chicks found in a nest
+                chicks = nest_data[nest_data.str.contains("Chick", case=False, na=False)].tolist()
+                if not chicks:
+                    chicks = 0
+                else:
+                    CHICK_RE = re.compile(r"(\d+)\s*chicks?\b", re.IGNORECASE)
+                    chicks = [int(n) for entry in chicks for n in CHICK_RE.findall(str(entry))]
+                    if not chicks:
+                        chicks = np.nan
+                    else:
+                        chicks = max(chicks)
+                df_target_per_year.loc[df_target_per_year["ID"] == ID, "Chicks"] = chicks
+
+                # Determines the max. amount of eggs found in a nest
+                eggs = nest_data[nest_data.str.contains("CC|CU|WU", case=False, na=False, regex=True)].tolist()
+                if not eggs:
+                    eggs = 0
+                else:
+                    EGG_RE = re.compile(r"(\d+)\s*(?:CC|CU|WU)\b", re.IGNORECASE)
+                    eggs = [int(n) for entry in eggs for n in EGG_RE.findall(str(entry))]
+                    if not eggs:
+                        eggs = np.nan
+                    else:
+                        eggs = max(eggs)
+                df_target_per_year.loc[df_target_per_year["ID"] == ID, "Eggs"] = eggs
+
+                # Determines the max. amount od deaths
+                deaths = nest_data[nest_data.str.contains(r"dead\b(?!\s*eggs?\b)", case=False, na=False, regex=True)].tolist()
+                if not deaths:
+                    deaths = 0
+                else:
+                    DEAD_EGG_RE = re.compile(r"dead\s*eggs?", re.IGNORECASE)
+                    DEAD_RE = re.compile(r"(\d+)\s*(?:dead\b|chicks?\s+dead\b)", re.IGNORECASE)
+
+                    deaths = [int(n) for entry in deaths for n in DEAD_RE.findall(str(entry))]
+                    if not deaths:
+                        deaths = np.nan
+                    else:
+                        deaths = max(deaths)
+                df_target_per_year.loc[df_target_per_year["ID"] == ID, "Deaths"] = deaths
+
+        df_target_per_year["Year"] = data_year
+        df_target = pd.concat([df_target, df_target_per_year], ignore_index=True)
+
+    # Clean up species column
+    df_target["Species_1"] = (
+        df_target["Species_1"]
+        .str.strip()
+        .replace({r"\?": "", r"\s*\(aggressiv\)": ""}, regex=True)  # substring cleanup
+        .str.strip()
+        .replace({
+            "GT (BT from 30.04)": "BT",
+            "U": np.nan,
+            "E": np.nan,
+            "": np.nan,
+        })
+    )
+    df_target["Species_2"] = (
+        df_target["Species_2"]
+        .str.strip()
+        .replace({r"\?": "", r"\s*\(aggressiv\)": ""}, regex=True)  # substring cleanup
+        .str.strip()
+        .replace({
+            "GT (BT from 30.04)": "BT",
+            "U": np.nan,
+            "E": np.nan,
+            "": np.nan,
+        })
+    )
+
+    # Set coordinates. Currently, the same for all years.
+    df_coordinates = pd.read_excel("nestbox_coordinates.xlsx", index_col=False)
+    for nest in df_coordinates.itertuples():
+        df_target.loc[df_target["ID"].astype(str) == nest.sensor_id, "Lat"] = nest.latitude
+        df_target.loc[df_target["ID"].astype(str) == nest.sensor_id, "Lon"] = nest.longitude
+
+    # Save the final data frame
+    df_target.to_csv("nestbox_data_total.csv", index=False)
+
+
+
+## Nest check data
+aggregate_nestbox_data(pl.Path("Data for students/Nestbox data"))
 
 ## Sensor Data
 # Sensor stuff
@@ -128,9 +319,6 @@ iButton_data = pd.read_csv("iButton_measurements.csv")
 
 # Map stuff
 sensor_location = pd.read_excel("nestbox_coordinates.xlsx") # Todo update file with new data (and updates rotation for at least one sensor)
-sensor_location["sensor_type"] = sensor_location["sensor_type"].fillna("Only Nest")
-sensor_location["species"] = sensor_location["species"].fillna("Unknown")
-
 
 ## Map Stuff
 # Bounding box for relevant map section of TU Dortmund
@@ -195,10 +383,16 @@ FloatImage(url, bottom=93, left=84, width='250px').add_to(tu_map) # left=89.5
 # Draw sensors
 years = []
 sensor_types = ["iButton", "Intelligent","Only Nest"]
+nestbox_df = pd.read_csv("nestbox_data_total.csv")
 for year in [2024,2025,2026]:
     year_group = folium.FeatureGroup(name=str(year))
     year_group.add_to(tu_map)
     years.append(year_group)
+
+    nestbox_df_per_year = nestbox_df[nestbox_df["Year"] == year]
+    for nestbox in nestbox_df_per_year.itertuples():
+        #print(nestbox)
+        pass
 
     for sensor in sensor_location.itertuples():
         sensor_rot_number = int(sensor.orientation.replace("N","").replace("E","").replace("S","").replace("W",""))
