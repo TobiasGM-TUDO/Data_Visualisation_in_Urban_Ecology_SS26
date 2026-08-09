@@ -7,6 +7,9 @@ import os
 import io
 import re
 from folium.plugins import FloatImage, GroupedLayerControl, MeasureControl, MousePosition, Search, TagFilterButton
+from matplotlib import pyplot as plt
+from nest_icons import nest_icon, add_nest_css, SPECIES # <- AI
+from badge_toggle import BadgeToggle # <- AI
 
 ## Constants
 IBUTTON_PARENT_DIRECTORY = r"Data for students/iButton data"
@@ -14,12 +17,50 @@ IBUTTON_PARENT_DIRECTORY = r"Data for students/iButton data"
 ## Function / Class Definitions
 
 class Nestbox:
-    def __init__(self, ID:str, nestbox_df:pd.DataFrame):
-        self.ID = ID
-        self.df = nestbox_df.loc[self.ID]
+    def __init__(self, metadata, sensor_data=None):
+        self.Year = metadata.Year
+        self.ID = metadata.ID
+        self.Type = metadata.Type
+        self.Lat = metadata.Lat
+        self.Lon = metadata.Lon
+        self.Species_1 = metadata.Species_1
+        self.Species_2 = metadata.Species_2
+        self.Height = metadata.Height
+        self.Orientation = metadata.Orientation
+        self.Eggs = metadata.Eggs
+        self.Chicks = metadata.Chicks
+        self.Deaths = metadata.Deaths
+        self.sensor_data = sensor_data
+        self.daytime_means = None
+        self.daytime_max = None
+        self.daytime_graphs = None
+        self.nighttime_means = None
+        self.nighttime_max = None
+        self.nighttime_graphs = None
+        self.tooltip = None
+
+        if sensor_data is not None:
+            self.aggregate_sensor_data()
+
+    def aggregate_sensor_data(self):
+        df = self.sensor_data
+        day_start, day_end = 10, 17
+
+        daytime = df[df["Timestamp"].dt.hour.between(day_start, day_end)].groupby("Variable")
+        self.daytime_means = daytime["Value"].mean()
+        self.daytime_max = daytime["Value"].max()
+        nighttime = df[df["Timestamp"].dt.hour.between(day_end , day_start)].groupby("Variable")
+        self.nighttime_means = nighttime["Value"].mean()
+        self.nighttime_max = nighttime["Value"].max()
+
+    def tooltip(self):
+        pass
 
 
-class IButton:
+
+
+
+class IbuttonFile:
     def __init__(self, path_to_csv:pl.Path):
         self.path_to_csv = path_to_csv
         # Determine sensor ID
@@ -51,9 +92,23 @@ class IButton:
 
             # Read the .CSV data
             self.df = pd.read_csv(io.StringIO(self.fix_ibutton_format(path_to_csv)), skiprows=18, decimal=",", delimiter=",")
+
+            # Cross-check the file name derived unit with the unit of actual readings and correct if needed
+            unit_file_content = self.df.iloc[0].Unit.replace("C", "T").replace("%RH", "H")
+            if unit_file_content not in self.variable:
+                print(f"Unit mismatch for file '{self.path_to_csv}' (ID: {self.id}! The file name reports {self.variable} and the content {unit_file_content}.")
+                if "I" in self.path_to_csv.stem:
+                    self.variable = unit_file_content + "I"
+                elif "O" in self.path_to_csv.stem:
+                    self.variable = unit_file_content + "O"
+                else:
+                    self.variable = unit_file_content + "X"
+                print(f"The new variable will be '{self.variable}'")
+
             # Add sensor ID and variable type (HI, HO, TI, TO) to the data frame
-            self.df["Id"] = self.id
+            self.df["ID"] = self.id
             self.df["Variable"] = self.variable
+
 
     def fix_ibutton_format(self, path_to_csv:pl.Path):
         with open(path_to_csv) as csv_file:
@@ -63,13 +118,13 @@ class IButton:
             regex_measurements = re.compile(r"\d{2}\/\d{2}\/\d{4}")
             regex_values_with_german_decimal = re.compile(r"(\d),(\d)")
 
-            # Loops through each line in the .csv file and replaces commas with dots, if the comma is between 2 numbers
+            # Loops through each line in the .csv file and replaces commas with dots, if the comma is between 2 numbers. Also fixed wrong seperator between Unit and value in some cases.
             csv_file_data_out = []
             for i,line in enumerate(csv_file_data_raw):
                 if "Date/Time" in line:
                     csv_file_data_out.append(line.replace("Date/Time", "Date,Time").replace("Unit.Value", "Unit,Value").replace("Time.Unit", "Time,Unit"))
                 elif regex_measurements.search(line):
-                    line_corrected = re.sub(regex_values_with_german_decimal, r"\1.\2", line)
+                    line_corrected = re.sub(regex_values_with_german_decimal, r"\1.\2", line).replace("C.", "C,").replace("%RH.", "%RH,")
                     csv_file_data_out.append(line_corrected)
                 else:
                     csv_file_data_out.append(line)
@@ -79,11 +134,11 @@ class IButton:
 
 def aggregate_ibutton_files(ibutton_parent_directory:pl.Path):
     """Aggregate data from iButton files into one data frame and save to csv"""
-    ibutton_data_total = pd.DataFrame(columns=["Id", "Variable", "Date", "Time", "Unit", "Value"])
+    ibutton_data_total = pd.DataFrame(columns=["ID", "Variable", "Date", "Time", "Unit", "Value"])
     for dirpath, dirnames, filenames in os.walk(IBUTTON_PARENT_DIRECTORY):
         for filename in filenames:
             file_path = pl.Path(os.path.join(dirpath, filename))
-            ibutton = IButton(file_path)
+            ibutton = IbuttonFile(file_path)
             ibutton_data = ibutton.df
             if not ibutton.id: continue
 
@@ -297,6 +352,9 @@ def aggregate_nestbox_data(nestbox_data_parent_dir:pl.Path):
         })
     )
 
+    # Clean up orientation column. The cardinal directions are redundant.
+    df_target["Orientation"] = df_target["Orientation"].str.replace(r"[NESW]", "", regex=True)
+
     # Set coordinates. Currently, the same for all years.
     df_coordinates = pd.read_excel("nestbox_coordinates.xlsx", index_col=False)
     for nest in df_coordinates.itertuples():
@@ -309,12 +367,11 @@ def aggregate_nestbox_data(nestbox_data_parent_dir:pl.Path):
 
 
 ## Nest check data
-aggregate_nestbox_data(pl.Path("Data for students/Nestbox data"))
+#aggregate_nestbox_data(pl.Path("Data for students/Nestbox data"))
 
 ## Sensor Data
 # Sensor stuff
 #aggregate_ibutton_files(pl.Path(IBUTTON_PARENT_DIRECTORY))
-iButton_data = pd.read_csv("iButton_measurements.csv")
 
 
 # Map stuff
@@ -336,17 +393,43 @@ tu_map = folium.Map(
     min_lon=min_lon,
     max_lon=max_lon,
 )
+add_nest_css(tu_map)
 
 # Tile sets for the map
-for tileset in ["CartoDB Positron", "Cartodb dark_matter", "OpenStreetMap"]:
+for (i,tileset) in enumerate(["OpenStreetMap"]):
     folium.TileLayer(
         tiles=tileset,
         referrer_policy="strict-origin-when-cross-origin",
+        show=(i == 0),
+        name=tileset,
     ).add_to(tu_map)
+folium.raster_layers.WmsTileLayer( # March
+    url="https://www.wms.nrw.de/geobasis/wms_nw_dop",
+    layers="nw_dop_rgb",
+    fmt="image/png",
+    transparent=False,
+    name="Aerial Image, NRW",
+    overlay=False,
+    control=True,
+    show=False,
+    attr="© Geobasis NRW / Datenlizenz Deutschland Zero 2.0",
+).add_to(tu_map)
+folium.raster_layers.WmsTileLayer( # March
+    url="https://www.wms.nrw.de/geobasis/wms_nw_dop",
+    layers="nw_dop_cir",
+    fmt="image/png",
+    transparent=False,
+    name="Aerial Image, NRW (DOP Infrared)",
+    overlay=False,
+    control=True,
+    show=False,
+    attr="© Geobasis NRW / Datenlizenz Deutschland Zero 2.0",
+).add_to(tu_map)
+
 
 # Add a little TU Dortmund logo
 url = "Logo_tud_logo_pantone_EN_kurz_VAR2_RGB.svg"
-FloatImage(url, bottom=93, left=84, width='250px').add_to(tu_map) # left=89.5
+FloatImage(url, bottom=1, left=0.5, width='250px').add_to(tu_map) # left=89.5
 
 ## For debugging. Enable when map bounding box should be visible.
 #folium.CircleMarker([max_lat, min_lon], tooltip=f"Upper Left Corner {[max_lat, min_lon]}").add_to(tu_map)
@@ -382,47 +465,62 @@ FloatImage(url, bottom=93, left=84, width='250px').add_to(tu_map) # left=89.5
 
 # Draw sensors
 years = []
-sensor_types = ["iButton", "Intelligent","Only Nest"]
 nestbox_df = pd.read_csv("nestbox_data_total.csv")
+sensor_types = sorted((nestbox_df["Year"].astype(str) + " " + nestbox_df["Type"]).unique())
+
+iButton_data = pd.read_csv("iButton_measurements.csv")
+iButton_data["Year"] = pd.to_datetime(iButton_data["Date"], format="%d/%m/%Y").dt.year
+iButton_data["Timestamp"] = pd.to_datetime(
+    iButton_data["Date"] + iButton_data["Time"],
+    format="%d/%m/%Y %H:%M:%S", errors="coerce",
+)
+iButton_data["ID"] = iButton_data["ID"].astype(str)
+iButton_data = iButton_data.set_index(["ID", "Year"]).sort_index()
+
 for year in [2024,2025,2026]:
-    year_group = folium.FeatureGroup(name=str(year))
+    year_group = folium.FeatureGroup(name=str(year), show=(year == 2026))
     year_group.add_to(tu_map)
     years.append(year_group)
 
     nestbox_df_per_year = nestbox_df[nestbox_df["Year"] == year]
-    for nestbox in nestbox_df_per_year.itertuples():
-        #print(nestbox)
-        pass
+    for nestbox_metadata in nestbox_df_per_year.itertuples():
+        if nestbox_metadata.Type == "iButton":
+            nestbox = Nestbox(nestbox_metadata, iButton_data.loc[(nestbox_metadata.ID, nestbox_metadata.Year)])
+        else:
+            nestbox = Nestbox(nestbox_metadata)
 
-    for sensor in sensor_location.itertuples():
-        sensor_rot_number = int(sensor.orientation.replace("N","").replace("E","").replace("S","").replace("W",""))
-        sensor_rot_text = sensor.orientation
-        sensor_lon = sensor.lon
-        sensor_lat = sensor.lat
-        sensor_type = sensor.sensor_type
-        sensor_id = sensor.nestbox_id
-
-        kw = {"prefix": "fa", "color": "green", "icon": "arrow-up"}
-        tooltip = folium.Tooltip(sensor_on_click_popup_html(sensor), sticky=True)
-        icon = folium.Icon(angle=sensor_rot_number, **kw)
-        # icon = folium.DivIcon(
-        #     html=
-        #     '<div style="display:flex;align-items:center;gap:5px;white-space:nowrap">'
-        #      '<i class="fa fa-flask" style="font-size:16px;color:#c0392b"></i>'
-        #      '<span style="font:600 12px sans-serif;color:#222;'
-        #      'background:rgba(255,255,255,.85);padding:1px 4px;border-radius:2px">'
-        #      'Nest 21</span></div>')
-        folium.Marker(location=[sensor_lat, sensor_lon],
-                      icon=icon,
-                      tooltip=tooltip,
-                      lazy=True,
-                      title=sensor_id+f" ({sensor_type})",
-                      tags=[sensor_type]
-                      ).add_to(year_group)
+        bird, bird_color = SPECIES.get(nestbox.Species_1, (None, None))
+        folium.Marker(
+            location=[nestbox.Lat, nestbox.Lon],
+            icon=nest_icon(
+                bird=bird,
+                bird_color=bird_color,
+                sensor=nestbox.Type,
+                t_in=None if nestbox.daytime_means is None else nestbox.daytime_means.get("TI"),
+                t_out=None if nestbox.daytime_means is None else nestbox.daytime_means.get("TO"),
+                eggs=nestbox.Eggs,
+                chicks=nestbox.Chicks,
+                dead=nestbox.Deaths,
+                facing=nestbox.Orientation,
+            ),
+            lazy=True,
+            title=f"{nestbox.ID} ({nestbox.Type})",
+            tags=[f"{nestbox.Year} {nestbox.Type}"],
+        ).add_to(year_group)
 
 # Adds a layer control UI element
-GroupedLayerControl(groups={"Year": years}, exclusive_groups=True).add_to(tu_map)
 folium.LayerControl(collapsed=False).add_to(tu_map)
+GroupedLayerControl(groups={"Year": years}, exclusive_groups=True).add_to(tu_map)
+
+# Adds a toggle for marker badges
+BadgeToggle().add_to(tu_map)
+
+# Measurement tool
+MeasureControl(
+    primary_length_unit="meters",
+    secondary_length_unit="kilometers",
+    primary_area_unit="sqmeters",
+).add_to(tu_map)
 
 # Adds a full screen button
 folium.plugins.Fullscreen(
@@ -432,21 +530,23 @@ folium.plugins.Fullscreen(
     force_separate_button=True,
 ).add_to(tu_map)
 
-# Measurement tool
-MeasureControl(
-    primary_length_unit="meters",
-    secondary_length_unit="kilometers",
-    primary_area_unit="sqmeters",
-).add_to(tu_map)
-
 # Enables a display of lon/lat of the cursor's positon in the bottom right corner
 # MousePosition().add_to(tu_map)
 
 # Search bar for markers
-Search(year_group, search_label="title", placeholder="Search for nestbox by ID or type").add_to(tu_map)
+Search(years[-1], search_label="title", placeholder="Search for nestbox by ID or type").add_to(tu_map)
 
 # Tag filter button
 TagFilterButton(sensor_types).add_to(tu_map) #Fixme: Counts sensors that are for other years too
+
+# Change the order of the zoom control buttons
+css_controls = """
+<style>
+.leaflet-top.leaflet-left { display:flex; flex-direction:column; align-items:flex-start; }
+.leaflet-top.leaflet-left .leaflet-control-zoom { order:99; }
+</style>
+"""
+tu_map.get_root().header.add_child(folium.Element(css_controls))
 
 # Save map
 tu_map.save('map.html')
