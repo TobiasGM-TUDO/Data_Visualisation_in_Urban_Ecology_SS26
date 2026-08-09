@@ -28,9 +28,10 @@ CSS_NEST = """
 .nest-s  { bottom:0;  left:50%; margin-left:-7.5px; }
 .nest-se { bottom:2px;  right:-5px; }
 
-.nest-dir { position:absolute; inset:-5px; transform:rotate(calc(var(--rot,0) * 1deg)); }
+.nest-dir { position:absolute; inset:-5px; transform:rotate(calc(var(--rot,0) * 1deg));
+            filter:drop-shadow(0 0 1px #fff); }
 .nest-dir::before { content:""; position:absolute; left:50%; top:-1px; margin-left:-5px;
-              border:5px solid transparent; border-bottom-color:var(--ring); }
+              border:5px solid transparent; border-bottom-color:#4A4A4A; }
 
 .nest-label { position:absolute; left:38px; top:9px; white-space:nowrap;
               font:600 11px/1.4 system-ui,sans-serif; color:#222;
