@@ -11,9 +11,27 @@ from matplotlib import pyplot as plt
 from nest_icons import nest_icon, add_nest_css, SPECIES # <- AI
 from badge_toggle import BadgeToggle # <- AI
 
+
 ## Constants
 IBUTTON_PARENT_DIRECTORY = r"Data for students/iButton data"
-
+DAY_START, DAY_END = 10, 17
+SPECIES_NAMES = {"GT": "Great Tit", "BT": "Blue Tit"}
+READINGS = {
+    "iButton": (
+        "iButton readings",
+        (("T<sub>in</sub> [°C]",   "TI"),
+         ("T<sub>out</sub> [°C]",  "TO"),
+         ("RH<sub>in</sub> [%]",   "HI"),
+         ("RH<sub>out</sub> [%]",  "HO")),
+    ),
+    # "Intelligent": (
+    #     "Intelligent sensor readings",
+    #     (("T<sub>in</sub> [°C]",  "T"),
+    #      ("RH<sub>in</sub> [%]",  "H"),
+    #      ("SPL [dB]",             "S"),
+    #      ("E<sub>v</sub> [lx]",   "L")),
+    # ),
+}
 ## Function / Class Definitions
 
 class Nestbox:
@@ -33,30 +51,102 @@ class Nestbox:
         self.sensor_data = sensor_data
         self.daytime_means = None
         self.daytime_max = None
+        self.daytime_min = None
         self.daytime_graphs = None
         self.nighttime_means = None
         self.nighttime_max = None
+        self.nighttime_min = None
         self.nighttime_graphs = None
-        self.tooltip = None
-
         if sensor_data is not None:
             self.aggregate_sensor_data()
+            #plt.plot(sensor_data.loc[sensor_data["Variable"] == "TI", "Timestamp"].values, sensor_data.loc[sensor_data["Variable"] == "TI", "Value"].values)
+            #plt.show()
+        self.tooltip = self._tooltip()
 
     def aggregate_sensor_data(self):
         df = self.sensor_data
-        day_start, day_end = 10, 17
+        day_start, day_end = DAY_START, DAY_END
 
-        daytime = df[df["Timestamp"].dt.hour.between(day_start, day_end)].groupby("Variable")
+        is_daytime = df["Timestamp"].dt.hour.between(day_start, day_end)
+        daytime = df[is_daytime].groupby("Variable")
+        self.daytime_min = daytime["Value"].min()
         self.daytime_means = daytime["Value"].mean()
         self.daytime_max = daytime["Value"].max()
-        nighttime = df[df["Timestamp"].dt.hour.between(day_end , day_start)].groupby("Variable")
+        nighttime = df[~is_daytime].groupby("Variable")
+        self.nighttime_min = nighttime["Value"].min()
         self.nighttime_means = nighttime["Value"].mean()
         self.nighttime_max = nighttime["Value"].max()
 
-    def tooltip(self):
-        pass
+    def _species_label(self):
+        """"Great Tit", or "1st Great Tit, 2nd Blue Tit" when a second brood was recorded."""
 
+        def name(code):
+            if code is None or code != code:
+                return None
+            return SPECIES_NAMES.get(code, code)
 
+        first, second = name(self.Species_1), name(self.Species_2)
+
+        if first is None:
+            return "Empty"
+        if second is None:
+            return first
+        return f"1st {first}, 2nd {second}"
+
+    def _meta_table(self):
+        """The rows that exist for every nestbox, whatever sensors it carries."""
+        rows = (
+            ("Type", self.Type),
+            ("Species", self._species_label()),
+            ("Height", f"{format_number(self.Height, 0)} cm"),
+            ("Orientation", f"{format_number(self.Orientation, 0)}°"),
+            ("Eggs / Chicks / Deaths",
+             " / ".join(format_number(value, 0)
+                        for value in (self.Eggs, self.Chicks, self.Deaths))),
+        )
+        cells = "".join(f"<tr><th>{label}</th><td>{value}</td></tr>" for label, value in rows)
+        return f'<table class="nb-meta">{cells}</table>'
+
+    def _readings_table(self):
+        """The sensor block. Empty string for nestbox types that carry no sensors."""
+        if self.Type not in READINGS or self.daytime_means is None:
+            return ""
+
+        caption, row_spec = READINGS[self.Type]
+        columns = (self.daytime_min, self.daytime_means, self.daytime_max,
+                   self.nighttime_min, self.nighttime_means, self.nighttime_max)
+        FIRST_NIGHT_COLUMN = 3
+
+        rows = ""
+        for label, variable in row_spec:
+            cells = ""
+            for index, series in enumerate(columns):
+                divider = ' class="nb-night"' if index == FIRST_NIGHT_COLUMN else ""
+                cells += f"<td{divider}>{format_number(series.get(variable))}</td>"
+            rows += f"<tr><td>{label}</td>{cells}</tr>"
+
+        return f"""
+            <p class="nb-caption">{caption}</p>
+            <table class="nb-readings">
+                <tr class="nb-group">
+                    <th></th><th colspan="3">Day ({DAY_START}&ndash;{DAY_END} h)</th>
+                    <th colspan="3" class="nb-night">Night</th>
+                </tr>
+                <tr>
+                    <th></th><th>Min</th><th>&empty;</th><th>Max</th>
+                    <th class="nb-night">Min</th><th>&empty;</th><th>Max</th>
+                </tr>
+                {rows}
+            </table>"""
+
+    def _tooltip(self):
+        """HTML shown on hover: metadata for every box, readings where they exist."""
+        return f"""
+            <div class="nb-tip">
+                <div class="nb-head">Nestbox {self.ID}</div>
+                {self._meta_table()}
+                {self._readings_table()}
+            </div>"""
 
 
 
@@ -131,7 +221,6 @@ class IbuttonFile:
 
         return "".join(csv_file_data_out)
 
-
 def aggregate_ibutton_files(ibutton_parent_directory:pl.Path):
     """Aggregate data from iButton files into one data frame and save to csv"""
     ibutton_data_total = pd.DataFrame(columns=["ID", "Variable", "Date", "Time", "Unit", "Value"])
@@ -151,26 +240,6 @@ def aggregate_ibutton_files(ibutton_parent_directory:pl.Path):
 
     #ibutton_data_total.head(5).to_csv("iButton_measurements_example.csv", index=False)
     ibutton_data_total.to_csv("iButton_measurements.csv", index=False)
-
-def sensor_on_click_popup_html(sensor_metadata):
-    # bg_color = "rgba(150, 150, 150, 0.15)"
-    # if "BT" in sensor_metadata.species:
-    #     bg_color = "rgba(0, 0, 255, 0.2)"
-    # elif "GT" in sensor_metadata.species:
-    #     bg_color = "rgba(50, 50, 50, 0.2)"
-    bg_color = "rgba(99, 154, 0, 0)"
-    header_bg_color = "rgba(125, 125, 125, 0)"#"rgba(125, 125, 125, 0.25)"
-
-    return f"""
-    <div style="font-family: sans-serif; font-size: 12px; padding: 0px;background: {bg_color}; border: 1px solid rgba(0,0,0,0.5);">
-        <p style="text-align: center; margin: 0; background: {bg_color}; border-bottom: 1px solid rgba(0,0,0,0.5);"><b>Nestbox {sensor_metadata.nestbox_id}</b><br></p>
-        Type: {sensor_metadata.sensor_type}<br>
-        Height: {sensor_metadata.height_cm} cm<br>
-        Orientation: {sensor_metadata.orientation}<br>
-        Coordinates: {sensor_metadata.lat}, {sensor_metadata.lon}<br>
-        Species: {sensor_metadata.species}
-    </div>
-    """
 
 def aggregate_nestbox_data(nestbox_data_parent_dir:pl.Path):
     """
@@ -364,9 +433,19 @@ def aggregate_nestbox_data(nestbox_data_parent_dir:pl.Path):
     # Save the final data frame
     df_target.to_csv("nestbox_data_total.csv", index=False)
 
-
+def format_number(value, digits=1):
+    """Format a number for the tooltip. Missing values become an en dash."""
+    if value is None:
+        return "&ndash;"
+    elif str(value) == "nan":
+        return "?"
+    try:
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return str(value)
 
 ## Nest check data
+
 #aggregate_nestbox_data(pl.Path("Data for students/Nestbox data"))
 
 ## Sensor Data
@@ -437,36 +516,11 @@ FloatImage(url, bottom=1, left=0.5, width='250px').add_to(tu_map) # left=89.5
 #folium.CircleMarker([min_lat, max_lon], tooltip=f"Lower Right Corner {[min_lat, max_lon]}").add_to(tu_map)
 #folium.CircleMarker([max_lat, max_lon], tooltip=f"Upper Right Corner {[max_lat, max_lon]}").add_to(tu_map)
 
-# Changes the default CSS
-# TU Green: rgba(99, 154, 0, 1)
-# TU Accent Orange: rgba(202, 116, 6, 1)
-# css_markers = """
-# <style>
-# .leaflet-tooltip {
-#     background: rgba(195, 195, 195, 0.3) !important;
-#     backdrop-filter: blur(5px) !important;
-#     -webkit-backdrop-filter: blur(5px) !important;
-#     border: none !important;
-#     box-shadow: none !important;
-#     padding: 0 !important;
-#
-# }
-# .leaflet-tooltip-left::before,
-# .leaflet-tooltip-right::before,
-# .leaflet-tooltip-top::before,
-# .leaflet-tooltip-bottom::before {
-#     border: none !important;
-#     display: none !important;
-# }
-# </style>
-# """
-#
-# tu_map.get_root().header.add_child(folium.Element(css_markers))
-
 # Draw sensors
 years = []
 nestbox_df = pd.read_csv("nestbox_data_total.csv")
 sensor_types = sorted((nestbox_df["Year"].astype(str) + " " + nestbox_df["Type"]).unique())
+tags_for_filters_labels = ["Great Tit", "Blue Tit", "Deaths", "Not Empty", "Has Chicks", "Has Eggs"]
 
 iButton_data = pd.read_csv("iButton_measurements.csv")
 iButton_data["Year"] = pd.to_datetime(iButton_data["Date"], format="%d/%m/%Y").dt.year
@@ -476,6 +530,11 @@ iButton_data["Timestamp"] = pd.to_datetime(
 )
 iButton_data["ID"] = iButton_data["ID"].astype(str)
 iButton_data = iButton_data.set_index(["ID", "Year"]).sort_index()
+
+# For coloring the temperature badges
+temp_means = iButton_data[iButton_data["Variable"].isin(("TI", "TO")) & iButton_data["Timestamp"].dt.hour.between(DAY_START, DAY_END)].groupby(["ID", "Year", "Variable"])["Value"].mean()
+temp_domain = tuple(temp_means.agg(["min", "max"]))
+
 
 for year in [2024,2025,2026]:
     year_group = folium.FeatureGroup(name=str(year), show=(year == 2026))
@@ -490,6 +549,22 @@ for year in [2024,2025,2026]:
             nestbox = Nestbox(nestbox_metadata)
 
         bird, bird_color = SPECIES.get(nestbox.Species_1, (None, None))
+
+        tags_for_filter = [f"{nestbox.Year} {nestbox.Type}"]
+        # Adds more tags for filters
+        if "GT" in str(nestbox.Species_1) or "GT" in str(nestbox.Species_2):
+            tags_for_filter.append("Great Tit")
+        if "BT" in str(nestbox.Species_1) or "BT" in str(nestbox.Species_2):
+            tags_for_filter.append("Blue Tit")
+        if nestbox.Deaths:
+            tags_for_filter.append("Deaths")
+        if nestbox.Species_1 and str(nestbox.Species_1) != "nan":
+            tags_for_filter.append("Not Empty")
+        if nestbox.Chicks:
+            tags_for_filter.append("Has Chicks")
+        if nestbox.Eggs:
+            tags_for_filter.append("Has Eggs")
+
         folium.Marker(
             location=[nestbox.Lat, nestbox.Lon],
             icon=nest_icon(
@@ -498,14 +573,16 @@ for year in [2024,2025,2026]:
                 sensor=nestbox.Type,
                 t_in=None if nestbox.daytime_means is None else nestbox.daytime_means.get("TI"),
                 t_out=None if nestbox.daytime_means is None else nestbox.daytime_means.get("TO"),
+                temp_domain = temp_domain,
                 eggs=nestbox.Eggs,
                 chicks=nestbox.Chicks,
                 dead=nestbox.Deaths,
                 facing=nestbox.Orientation,
             ),
             lazy=True,
-            title=f"{nestbox.ID} ({nestbox.Type})",
-            tags=[f"{nestbox.Year} {nestbox.Type}"],
+            tooltip=folium.Tooltip(nestbox.tooltip, sticky=False),
+            search_key=f"{nestbox.ID} ({nestbox.Type})",
+            tags=tags_for_filter,
         ).add_to(year_group)
 
 # Adds a layer control UI element
@@ -534,10 +611,11 @@ folium.plugins.Fullscreen(
 # MousePosition().add_to(tu_map)
 
 # Search bar for markers
-Search(years[-1], search_label="title", placeholder="Search for nestbox by ID or type").add_to(tu_map)
+Search(years[-1], search_label="searchKey", placeholder="Search for nestbox by ID or type").add_to(tu_map)
 
 # Tag filter button
-TagFilterButton(sensor_types).add_to(tu_map) #Fixme: Counts sensors that are for other years too
+TagFilterButton(sensor_types).add_to(tu_map)
+TagFilterButton(tags_for_filters_labels, icon="fa-tags").add_to(tu_map)
 
 # Change the order of the zoom control buttons
 css_controls = """

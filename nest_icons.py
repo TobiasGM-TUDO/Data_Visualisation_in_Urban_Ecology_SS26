@@ -29,13 +29,31 @@ CSS_NEST = """
 .nest-se { bottom:2px;  right:-5px; }
 
 .nest-dir { position:absolute; inset:-5px; transform:rotate(calc(var(--rot,0) * 1deg));
-            filter:drop-shadow(0 0 1px #fff); }
+            filter:drop-shadow(0 0 0.5px #fff) drop-shadow(0 0 1px #fff); }
 .nest-dir::before { content:""; position:absolute; left:50%; top:-1px; margin-left:-5px;
-              border:5px solid transparent; border-bottom-color:#4A4A4A; }
+              border:5px solid transparent; border-bottom-color:var(--ring); }
 
 .nest-label { position:absolute; left:38px; top:9px; white-space:nowrap;
               font:600 11px/1.4 system-ui,sans-serif; color:#222;
               background:rgba(255,255,255,.85); padding:0 4px; border-radius:2px; }
+.nb-tip       { font:12px/1.45 system-ui,sans-serif; color:#222; }
+.nb-head      { font-weight:700; margin-bottom:6px; }
+.nb-tip table { border-collapse:collapse; }
+
+.nb-meta      { width:100%; }
+.nb-meta th   { text-align:left;  font-weight:400; color:#555; padding:1px 10px 1px 0; white-space:nowrap; }
+.nb-meta td   { text-align:right; padding:1px 0; font-variant-numeric:tabular-nums; }
+
+.nb-caption     { margin:8px 0 3px; padding-top:6px; border-top:1px solid rgba(0,0,0,.15); color:#555; }
+.nb-readings th { font-weight:400; color:#555; text-align:right; padding:1px 0 1px 8px; }
+.nb-readings td { text-align:right; padding:1px 0 1px 8px; font-variant-numeric:tabular-nums; }
+.nb-readings tr th:first-child,
+.nb-readings tr td:first-child { text-align:left; padding-left:0; white-space:nowrap; }
+.nb-group th    { text-align:center; padding-bottom:2px; }
+
+.nb-readings .nb-night { border-left:1px solid rgba(0,0,0,.15); padding-left:14px; }
+.nb-readings td:nth-child(4),
+.nb-readings tr:not(.nb-group) th:nth-child(4) { padding-right:14px; }
 </style>
 """
 
@@ -43,7 +61,7 @@ CSS_NEST = """
 # categorical lookups -- edit these, not the function body
 # --------------------------------------------------------------------------
 SENSOR = {                       # Type -> (unused glyph, ring colour)
-    "Nest":    (None,         "#9A9A9A"),
+    "Nest":    (None,         "#37474F"),
     "iButton": ("circle-dot", "#5B2D9B"),
     "Intelligent":   ("microchip",  "#C2185B"),
 }
@@ -59,7 +77,7 @@ SPECIES = {                      # species code -> (glyph, colour)
 # temperature ramp for the two top badges (blue -> yellow -> red)
 TEMP_RAMP = [(44, 123, 182), (171, 217, 233), (255, 255, 191),
              (253, 174, 97), (215, 25, 28)]
-TEMP_DOMAIN = (12.0, 27.0)       # degC; 1st-99th percentile of the daytime means
+TEMP_DOMAIN = (12.0, 27.0)       # degC; 1st-99th percentile of the daytime means; just fallback
 
 
 # --------------------------------------------------------------------------
