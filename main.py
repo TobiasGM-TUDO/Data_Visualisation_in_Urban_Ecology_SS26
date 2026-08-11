@@ -13,6 +13,7 @@ from matplotlib.dates import AutoDateLocator, DateFormatter
 from matplotlib.ticker import MaxNLocator
 from nest_icons import nest_icon, add_nest_css, SPECIES # <- AI
 from badge_toggle import BadgeToggle # <- AI
+import base64 # For favicon
 
 
 ## Constants
@@ -557,7 +558,7 @@ def format_number(value, digits=1):
 
 ## Sensor Data
 # Sensor stuff
-aggregate_ibutton_files(pl.Path(IBUTTON_PARENT_DIRECTORY))
+#aggregate_ibutton_files(pl.Path(IBUTTON_PARENT_DIRECTORY))
 
 
 # Map stuff
@@ -614,8 +615,8 @@ folium.raster_layers.WmsTileLayer( # March
 
 
 # Add a little TU Dortmund logo
-url = "Logo_tud_logo_pantone_EN_kurz_VAR2_RGB.svg"
-FloatImage(url, bottom=1, left=0.5, width='250px').add_to(tu_map) # left=89.5
+tu_logo = base64.b64encode(pl.Path("Logo_tud_logo_pantone_EN_kurz_VAR2_RGB.svg").read_bytes()).decode("ascii")
+FloatImage(f"data:image/svg+xml;base64,{tu_logo}", bottom=1, left=0.5, width='250px').add_to(tu_map)
 
 ## For debugging. Enable when map bounding box should be visible.
 #folium.CircleMarker([max_lat, min_lon], tooltip=f"Upper Left Corner {[max_lat, min_lon]}").add_to(tu_map)
@@ -729,6 +730,12 @@ css_controls = """
 </style>
 """
 tu_map.get_root().header.add_child(folium.Element(css_controls))
+
+# Favicon
+icon = base64.b64encode(pl.Path("favicon_crow.svg").read_bytes()).decode("ascii")
+tu_map.get_root().header.add_child(folium.Element(
+    f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{icon}">'
+))
 
 # Save map
 tu_map.save('map.html')
