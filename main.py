@@ -807,6 +807,8 @@ tu_map.get_root().header.add_child(folium.Element(
     f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{icon}">'
 ))
 
+# Website title (next to favicon)
+tu_map.get_root().header.add_child(folium.Element("<title>TU Dortmund Nestboxes (Data Visualization in Urban Ecology)</title>"))
 
 # Save map
 tu_map.save('map.html')
