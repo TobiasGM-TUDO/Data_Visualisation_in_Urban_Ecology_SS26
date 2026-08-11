@@ -737,7 +737,7 @@ folium.LayerControl(collapsed=False).add_to(tu_map)
 GroupedLayerControl(groups={"Year": years}, exclusive_groups=True).add_to(tu_map)
 
 # Adds a toggle for marker badges
-BadgeToggle().add_to(tu_map)
+BadgeToggle(visible={"Orientation"}).add_to(tu_map)
 
 # Measurement tool
 MeasureControl(
