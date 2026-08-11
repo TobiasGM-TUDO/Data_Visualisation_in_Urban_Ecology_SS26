@@ -636,8 +636,9 @@ nestbox_stats_yearly_max.to_csv("nestbox_stats_yearly_max.csv", index=True)
 ## Draw sensors
 years_data = nestbox_df["Year"].unique().tolist()
 sensor_types = sorted((nestbox_df["Year"].astype(str) + " " + nestbox_df["Type"]).unique())
-tags_for_filters_labels = ["Great Tit", "Blue Tit", "Deaths", "Not Empty", "Has Chicks", "Has Eggs"]
 
+# Add tags for filters
+tags_for_filters_labels = ["Great Tit", "Blue Tit", "Deaths", "No Deaths", "Empty", "Not Empty", "Has Chicks", "Has no Chicks", "Has Eggs", "Has no Eggs"]
 metrics_yearly_stats = ("Eggs", "Chicks") # No Deaths since the avg is < 1 for all years
 tags_for_yearly_stats = [[
     f"{metric} {comparison} Avg. ({year})"
@@ -655,6 +656,9 @@ for _list in tags_for_yearly_stats:
     new_tags_for_yearly_stats.append(new_list_tags_yearly)
 tags_for_yearly_stats = new_tags_for_yearly_stats
 
+for metric, tags in zip(metrics_yearly_stats, tags_for_yearly_stats):
+    tags.append(f"Abandoned {metric}")
+    tags.append(f"#{metric} unknown")
 
 # Prepares iButton data frame
 iButton_data = pd.read_csv("iButton_measurements.csv", parse_dates=["Timestamp"])
@@ -689,18 +693,31 @@ for year in years_data:
             tags_for_filter.append("Blue Tit")
         if nestbox.Deaths:
             tags_for_filter.append("Deaths")
+        else:
+            tags_for_filter.append("No Deaths")
         if nestbox.Species_1 and str(nestbox.Species_1) != "nan":
             tags_for_filter.append("Not Empty")
+        else:
+            tags_for_filter.append("Empty")
         if nestbox.Chicks:
             tags_for_filter.append("Has Chicks")
+        else:
+            tags_for_filter.append("Has no Chicks")
         if nestbox.Eggs:
             tags_for_filter.append("Has Eggs")
+        else:
+            tags_for_filter.append("Has no Eggs")
+        if nestbox.Eggs and (not nestbox.Species_1 or str(nestbox.Species_1) == "nan"):
+            tags_for_filter.append("Abandoned Eggs")
+        if nestbox.Chicks and (not nestbox.Species_1 or str(nestbox.Species_1) == "nan"):
+            tags_for_filter.append("Abandoned Chicks")
         for _year in years_data:
             for metric in metrics_yearly_stats:
                 yearly_stat_avg = nestbox_stats_yearly_avg.loc[_year, metric]
                 yearly_stat_max = nestbox_stats_yearly_max.loc[_year, metric]
                 nestbox_stat = getattr(nestbox_metadata, metric)
-                if str(nestbox_stat).lower() == "nan": continue
+                if str(nestbox_stat).lower() == "nan":
+                    tags_for_filter.append(f"#{metric} unknown")
 
                 if nestbox_stat > yearly_stat_avg:
                     tags_for_filter.append(f"{metric} > Avg. ({_year})")
