@@ -7,7 +7,10 @@ import os
 import io
 import re
 from folium.plugins import FloatImage, GroupedLayerControl, MeasureControl, MousePosition, Search, TagFilterButton
-from matplotlib import pyplot as plt
+import io
+from matplotlib.figure import Figure
+from matplotlib.dates import AutoDateLocator, DateFormatter
+from matplotlib.ticker import MaxNLocator
 from nest_icons import nest_icon, add_nest_css, SPECIES # <- AI
 from badge_toggle import BadgeToggle # <- AI
 
@@ -49,6 +52,8 @@ class Nestbox:
         self.Chicks = metadata.Chicks
         self.Deaths = metadata.Deaths
         self.sensor_data = sensor_data
+        self.daytime_readings = None
+        self.nighttime_readings = None
         self.daytime_means = None
         self.daytime_max = None
         self.daytime_min = None
@@ -58,21 +63,19 @@ class Nestbox:
         self.nighttime_min = None
         self.nighttime_graphs = None
         if sensor_data is not None:
+            is_daytime = sensor_data["Timestamp"].dt.hour.between(DAY_START, DAY_END)
+            self.daytime_readings = self.sensor_data[is_daytime].groupby("Variable")
+            self.nighttime_readings = self.sensor_data[~is_daytime].groupby("Variable")
             self.aggregate_sensor_data()
-            #plt.plot(sensor_data.loc[sensor_data["Variable"] == "TI", "Timestamp"].values, sensor_data.loc[sensor_data["Variable"] == "TI", "Value"].values)
-            #plt.show()
         self.tooltip = self._tooltip()
+        self.popup = self._popup()
 
     def aggregate_sensor_data(self):
-        df = self.sensor_data
-        day_start, day_end = DAY_START, DAY_END
-
-        is_daytime = df["Timestamp"].dt.hour.between(day_start, day_end)
-        daytime = df[is_daytime].groupby("Variable")
+        daytime = self.daytime_readings
         self.daytime_min = daytime["Value"].min()
         self.daytime_means = daytime["Value"].mean()
         self.daytime_max = daytime["Value"].max()
-        nighttime = df[~is_daytime].groupby("Variable")
+        nighttime = self.nighttime_readings
         self.nighttime_min = nighttime["Value"].min()
         self.nighttime_means = nighttime["Value"].mean()
         self.nighttime_max = nighttime["Value"].max()
@@ -140,15 +143,114 @@ class Nestbox:
             </table>"""
 
     def _tooltip(self):
-        """HTML shown on hover: metadata for every box, readings where they exist."""
+        if self.sensor_data is not None:
+            pop_up_hint = "-> Click for more information!"
+        else:
+            pop_up_hint = ""
         return f"""
             <div class="nb-tip">
                 <div class="nb-head">Nestbox {self.ID}</div>
                 {self._meta_table()}
                 {self._readings_table()}
+                {pop_up_hint}
             </div>"""
 
+    def _popup(self):
+        if self.sensor_data is None: return None
 
+        if "TI" in self.daytime_readings.groups:
+            ti_day = (self.daytime_readings.get_group("TI").resample("D", on="Timestamp")["Value"].mean().rolling(3, center=True, min_periods=1).mean())
+        else:
+            ti_day = None
+        if "TO" in self.daytime_readings.groups:
+            to_day = (self.daytime_readings.get_group("TO").resample("D", on="Timestamp")["Value"].mean().rolling(3, center=True, min_periods=1).mean())
+        else:
+            to_day = None
+        if "TI" in self.nighttime_readings.groups:
+            ti_night = (self.nighttime_readings.get_group("TI").resample("D", on="Timestamp")["Value"].mean().rolling(3, center=True, min_periods=1).mean())
+        else:
+            ti_night = None
+        if "TO" in self.nighttime_readings.groups:
+            to_night = (self.nighttime_readings.get_group("TO").resample("D", on="Timestamp")["Value"].mean().rolling(3, center=True, min_periods=1).mean())
+        else:
+            to_night = None
+        if "HI" in self.daytime_readings.groups:
+            hi_day = (self.daytime_readings.get_group("HI").resample("D", on="Timestamp")["Value"].mean().rolling(3, center=True, min_periods=1).mean())
+        else:
+            hi_day = None
+        if "HO" in self.daytime_readings.groups:
+            ho_day = (self.daytime_readings.get_group("HO").resample("D", on="Timestamp")["Value"].mean().rolling(3, center=True, min_periods=1).mean())
+        else:
+            ho_day = None
+        if "HI" in self.nighttime_readings.groups:
+            hi_night = (self.nighttime_readings.get_group("HI").resample("D", on="Timestamp")["Value"].mean().rolling(3, center=True, min_periods=1).mean())
+        else:
+            hi_night = None
+        if "HO" in self.nighttime_readings.groups:
+            ho_night = (self.nighttime_readings.get_group("HO").resample("D", on="Timestamp")["Value"].mean().rolling(3, center=True, min_periods=1).mean())
+        else:
+            ho_night = None
+
+        INSIDE, OUTSIDE = "#D55E00", "#0072B2"
+        DAY, NIGHT = ("-", 1.3), ((0, (4, 2)), 1.3)
+
+        t_plot = self._plot_to_svg(
+            [
+                {"series": ti_day, "label": "Inside Day", "format": DAY, "color": INSIDE},
+                {"series": ti_night, "label": "Inside Night", "format": NIGHT, "color": INSIDE},
+                {"series": to_day, "label": "Outside Day", "format": DAY, "color": OUTSIDE},
+                {"series": to_night, "label": "Outside Night", "format": NIGHT, "color": OUTSIDE},
+                ],
+                unit="°C",
+                title="Temperature",
+                xlabel_enabled=False)
+        h_plot = self._plot_to_svg(
+            [
+                {"series": hi_day, "label": "Inside Day", "format": DAY, "color": INSIDE},
+                {"series": hi_night, "label": "Inside Night", "format": NIGHT, "color": INSIDE},
+                {"series": ho_day, "label": "Outside Day", "format": DAY, "color": OUTSIDE},
+                {"series": ho_night, "label": "Outside Night", "format": NIGHT, "color": OUTSIDE},
+                ],
+                unit="%",
+                title="Humidity",
+                legend=False,
+                xlabel_enabled=True)
+
+
+        popup_html = f"""<div class="nb-head">Nestbox {self.ID}</div>
+                        {t_plot} {h_plot}"""
+        return popup_html
+
+    def _plot_to_svg(self, data, title=None, unit="", legend=True, xlabel_enabled=True):
+        """Render a small line plot and return it as an inline-ready SVG string."""
+        figure = Figure(figsize=(4, 2), dpi=100)
+        axes = figure.subplots()
+        for plot_data in data:
+            if plot_data["series"] is not None:
+                linestyle, linewidth = plot_data["format"]
+                axes.plot(plot_data["series"].index, plot_data["series"].values, linestyle=linestyle, linewidth=linewidth, color=plot_data["color"], label=plot_data["label"])
+
+        #axes.set_title(title, fontsize=9)
+        axes.xaxis.set_major_locator(AutoDateLocator(maxticks=5, minticks=5))
+        axes.xaxis.set_major_formatter(DateFormatter("%d %b"))
+        axes.tick_params(axis="x", labelsize=7, labelrotation=30)
+        for label in axes.get_xticklabels():
+            label.set_horizontalalignment("right")
+            label.set_rotation_mode("anchor")
+        if xlabel_enabled:
+            axes.set_xlabel(f"Date ({self.Year})", fontsize=7)
+
+        axes.set_ylabel(f"{title} / {unit}", fontsize=7)
+        axes.yaxis.set_major_locator(MaxNLocator(nbins=5))
+
+        if legend:
+            axes.legend(fontsize=6, frameon=False, ncols=2, loc="upper center", bbox_to_anchor=(0.5, 1.28), handlelength=2.4, columnspacing=1.4)
+
+        buffer = io.StringIO()
+        figure.savefig(buffer, format="svg", bbox_inches="tight")
+
+        svg = buffer.getvalue()
+        return svg[svg.index("<svg"):]
 
 class IbuttonFile:
     def __init__(self, path_to_csv:pl.Path):
@@ -238,7 +340,12 @@ def aggregate_ibutton_files(ibutton_parent_directory:pl.Path):
 
             ibutton_data_total = pd.concat([ibutton_data_total,ibutton_data], ignore_index=True)
 
-    #ibutton_data_total.head(5).to_csv("iButton_measurements_example.csv", index=False)
+
+    # Create timestamps from date and time
+    ibutton_data_total["Timestamp"] = pd.to_datetime(ibutton_data_total["Date"] + ibutton_data_total["Time"], format="%d/%m/%Y %H:%M:%S", errors="coerce")
+
+    # Drops duplicates from mistakenly duplicated files and saves the data fram to csv
+    ibutton_data_total = ibutton_data_total.drop_duplicates(subset=["ID", "Variable", "Timestamp"])
     ibutton_data_total.to_csv("iButton_measurements.csv", index=False)
 
 def aggregate_nestbox_data(nestbox_data_parent_dir:pl.Path):
@@ -450,7 +557,7 @@ def format_number(value, digits=1):
 
 ## Sensor Data
 # Sensor stuff
-#aggregate_ibutton_files(pl.Path(IBUTTON_PARENT_DIRECTORY))
+aggregate_ibutton_files(pl.Path(IBUTTON_PARENT_DIRECTORY))
 
 
 # Map stuff
@@ -522,12 +629,8 @@ nestbox_df = pd.read_csv("nestbox_data_total.csv")
 sensor_types = sorted((nestbox_df["Year"].astype(str) + " " + nestbox_df["Type"]).unique())
 tags_for_filters_labels = ["Great Tit", "Blue Tit", "Deaths", "Not Empty", "Has Chicks", "Has Eggs"]
 
-iButton_data = pd.read_csv("iButton_measurements.csv")
+iButton_data = pd.read_csv("iButton_measurements.csv", parse_dates=["Timestamp"])
 iButton_data["Year"] = pd.to_datetime(iButton_data["Date"], format="%d/%m/%Y").dt.year
-iButton_data["Timestamp"] = pd.to_datetime(
-    iButton_data["Date"] + iButton_data["Time"],
-    format="%d/%m/%Y %H:%M:%S", errors="coerce",
-)
 iButton_data["ID"] = iButton_data["ID"].astype(str)
 iButton_data = iButton_data.set_index(["ID", "Year"]).sort_index()
 
@@ -581,6 +684,7 @@ for year in [2024,2025,2026]:
             ),
             lazy=True,
             tooltip=folium.Tooltip(nestbox.tooltip, sticky=False),
+            popup=folium.Popup(nestbox.popup) if nestbox.popup else None,
             search_key=f"{nestbox.ID} ({nestbox.Type})",
             tags=tags_for_filter,
         ).add_to(year_group)
