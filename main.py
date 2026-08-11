@@ -624,12 +624,40 @@ FloatImage(f"data:image/svg+xml;base64,{tu_logo}", bottom=1, left=0.5, width='25
 #folium.CircleMarker([min_lat, max_lon], tooltip=f"Lower Right Corner {[min_lat, max_lon]}").add_to(tu_map)
 #folium.CircleMarker([max_lat, max_lon], tooltip=f"Upper Right Corner {[max_lat, max_lon]}").add_to(tu_map)
 
-# Draw sensors
-years = []
+## General, yearly stats; Unknown amounts of eggs/chicks/death are set to 1 # Todo use these stats
 nestbox_df = pd.read_csv("nestbox_data_total.csv")
+nestbox_stats_yearly_avg = nestbox_df.fillna(1).groupby(["Year"])[["Eggs", "Chicks", "Deaths"]].mean()
+nestbox_stats_yearly_sum = nestbox_df.fillna(1).groupby(["Year"])[["Eggs", "Chicks", "Deaths"]].sum()
+nestbox_stats_yearly_max = nestbox_df.fillna(1).groupby(["Year"])[["Eggs", "Chicks", "Deaths"]].max()
+# Saves the stats for later use
+nestbox_stats_yearly_avg.to_csv("nestbox_stats_yearly_avg.csv", index=True)
+nestbox_stats_yearly_sum.to_csv("nestbox_stats_yearly_sum.csv", index=True)
+nestbox_stats_yearly_max.to_csv("nestbox_stats_yearly_max.csv", index=True)
+
+## Draw sensors
+years_data = nestbox_df["Year"].unique().tolist()
 sensor_types = sorted((nestbox_df["Year"].astype(str) + " " + nestbox_df["Type"]).unique())
 tags_for_filters_labels = ["Great Tit", "Blue Tit", "Deaths", "Not Empty", "Has Chicks", "Has Eggs"]
 
+metrics_yearly_stats = ("Eggs", "Chicks") # No Deaths since the avg is < 1 for all years
+tags_for_yearly_stats = [[
+    f"{metric} {comparison} Avg. ({year})"
+    for year in years_data
+    for comparison in ("≥", ">", "<")
+] for metric in metrics_yearly_stats]
+
+new_tags_for_yearly_stats = []
+for _list in tags_for_yearly_stats:
+    new_list_tags_yearly = []
+    for tag in _list:
+        if "≥" in tag:
+            tag = tag.replace("Avg.", "Max.")
+        new_list_tags_yearly.append(tag)
+    new_tags_for_yearly_stats.append(new_list_tags_yearly)
+tags_for_yearly_stats = new_tags_for_yearly_stats
+
+
+# Prepares iButton data frame
 iButton_data = pd.read_csv("iButton_measurements.csv", parse_dates=["Timestamp"])
 iButton_data["Year"] = pd.to_datetime(iButton_data["Date"], format="%d/%m/%Y").dt.year
 iButton_data["ID"] = iButton_data["ID"].astype(str)
@@ -639,8 +667,8 @@ iButton_data = iButton_data.set_index(["ID", "Year"]).sort_index()
 temp_means = iButton_data[iButton_data["Variable"].isin(("TI", "TO")) & iButton_data["Timestamp"].dt.hour.between(DAY_START, DAY_END)].groupby(["ID", "Year", "Variable"])["Value"].mean()
 temp_domain = tuple(temp_means.agg(["min", "max"]))
 
-
-for year in [2024,2025,2026]:
+years = []
+for year in years_data:
     year_group = folium.FeatureGroup(name=str(year), show=(year == 2026))
     year_group.add_to(tu_map)
     years.append(year_group)
@@ -668,6 +696,20 @@ for year in [2024,2025,2026]:
             tags_for_filter.append("Has Chicks")
         if nestbox.Eggs:
             tags_for_filter.append("Has Eggs")
+        for _year in years_data:
+            for metric in metrics_yearly_stats:
+                yearly_stat_avg = nestbox_stats_yearly_avg.loc[_year, metric]
+                yearly_stat_max = nestbox_stats_yearly_max.loc[_year, metric]
+                nestbox_stat = getattr(nestbox_metadata, metric)
+                if str(nestbox_stat).lower() == "nan": continue
+
+                if nestbox_stat > yearly_stat_avg:
+                    tags_for_filter.append(f"{metric} > Avg. ({_year})")
+                else:
+                    tags_for_filter.append(f"{metric} < Avg. ({_year})")
+
+                if nestbox_stat >= yearly_stat_max:
+                    tags_for_filter.append(f"{metric} ≥ Max. ({_year})")
 
         folium.Marker(
             location=[nestbox.Lat, nestbox.Lon],
@@ -721,6 +763,15 @@ Search(years[-1], search_label="searchKey", placeholder="Search for nestbox by I
 # Tag filter button
 TagFilterButton(sensor_types).add_to(tu_map)
 TagFilterButton(tags_for_filters_labels, icon="fa-tags").add_to(tu_map)
+for tag_list in tags_for_yearly_stats:
+    if "egg" in tag_list[0].lower():
+        icon = "fa-egg"
+    elif "chick" in tag_list[0].lower():
+        icon = "fa-dove"
+    else:
+        icon = "fa-filter"
+    TagFilterButton(tag_list, icon=icon).add_to(tu_map)
+
 
 # Change the order of the zoom control buttons
 css_controls = """
