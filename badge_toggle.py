@@ -8,6 +8,7 @@ BADGES = {
     "Chicks":      ".nest-s",
     "Deaths":      ".nest-se",
     "Orientation": ".nest-dir",
+    "Markers": ".nest",
 }
 
 
@@ -58,7 +59,7 @@ class BadgeToggle(MacroElement):
         {% endmacro %}
     """)
 
-    def __init__(self, badges=BADGES, title="Marker Badges", position="topright",
+    def __init__(self, badges=BADGES, title="Marker Options", position="topright",
                  visible=False):
         super().__init__()
         self._name = "BadgeToggle"

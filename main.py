@@ -6,7 +6,7 @@ import pathlib as pl
 import os
 import io
 import re
-from folium.plugins import FloatImage, GroupedLayerControl, MeasureControl, MousePosition, Search, TagFilterButton
+from folium.plugins import FloatImage, GroupedLayerControl, MeasureControl, MousePosition, Search, TagFilterButton, HeatMap
 import io
 from matplotlib.figure import Figure
 from matplotlib.dates import AutoDateLocator, DateFormatter
@@ -14,7 +14,6 @@ from matplotlib.ticker import MaxNLocator
 from nest_icons import nest_icon, add_nest_css, SPECIES # <- AI
 from badge_toggle import BadgeToggle # <- AI
 import base64 # For favicon
-
 
 ## Constants
 IBUTTON_PARENT_DIRECTORY = r"Data for students/iButton data"
@@ -732,12 +731,32 @@ for year in years_data:
             tags=tags_for_filter,
         ).add_to(year_group)
 
+
+## Heat maps for general nestbox data
+heatmap_layers = []
+for metric in ("Eggs", "Chicks", "Deaths"):
+    for year in years_data:
+        rows = nestbox_df[nestbox_df["Year"] == year].fillna(value=1)
+        if rows.empty:
+            continue
+        weights = rows[metric] / nestbox_df[metric].max()
+        heatmap = HeatMap(
+            list(zip(rows["Lat"], rows["Lon"], weights)),
+            name=f"{metric} ({year})",
+            radius=28, blur=20, min_opacity=0.25,
+            show=False
+        )
+        heatmap.add_to(tu_map)
+        heatmap_layers.append(heatmap)
+
+
 # Adds a layer control UI element
 folium.LayerControl(collapsed=False).add_to(tu_map)
 GroupedLayerControl(groups={"Year": years}, exclusive_groups=True).add_to(tu_map)
+GroupedLayerControl(groups={"Heatmaps": heatmap_layers}, exclusive_groups=False).add_to(tu_map)
 
 # Adds a toggle for marker badges
-BadgeToggle(visible={"Orientation"}).add_to(tu_map)
+BadgeToggle(visible={"Orientation", "Markers"}).add_to(tu_map)
 
 # Measurement tool
 MeasureControl(
@@ -787,6 +806,7 @@ icon = base64.b64encode(pl.Path("favicon_crow.svg").read_bytes()).decode("ascii"
 tu_map.get_root().header.add_child(folium.Element(
     f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{icon}">'
 ))
+
 
 # Save map
 tu_map.save('map.html')
