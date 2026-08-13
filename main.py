@@ -409,11 +409,11 @@ def aggregate_nestbox_data(nestbox_data_parent_dir:pl.Path):
                 df_target_per_year.loc[df_target_per_year["ID"] == ID, "Chicks"] = chicks
 
                 # Determines the max. amount of eggs found in a nest
-                eggs = nest_data[nest_data.str.contains("CC|CU|WU", case=False, na=False, regex=True)].tolist()
+                eggs = nest_data[nest_data.str.contains("CC|CU|WU|eggs?", case=False, na=False, regex=True)].tolist()
                 if not eggs:
                     eggs = 0
                 else:
-                    EGG_RE = re.compile(r"(\d+)\s*(?:CC|CU|WU)\b", re.IGNORECASE)
+                    EGG_RE = re.compile(r"(\d+)\s*(?:CC|CU|WU|eggs?)\b", re.IGNORECASE)
                     eggs = [int(n) for entry in nest_data.dropna() for n in EGG_RE.findall(str(entry))]
                     if not eggs:
                         eggs = np.nan
@@ -472,11 +472,11 @@ def aggregate_nestbox_data(nestbox_data_parent_dir:pl.Path):
                 df_target_per_year.loc[df_target_per_year["ID"] == ID, "Chicks"] = chicks
 
                 # Determines the max. amount of eggs found in a nest
-                eggs = nest_data[nest_data.str.contains("CC|CU|WU", case=False, na=False, regex=True)].tolist()
+                eggs = nest_data[nest_data.str.contains("CC|CU|WU|eggs?", case=False, na=False, regex=True)].tolist()
                 if not eggs:
                     eggs = 0
                 else:
-                    EGG_RE = re.compile(r"(\d+)\s*(?:CC|CU|WU)\b", re.IGNORECASE)
+                    EGG_RE = re.compile(r"(\d+)\s*(?:CC|CU|WU|eggs?)\b", re.IGNORECASE)
                     eggs = [int(n) for entry in eggs for n in EGG_RE.findall(str(entry))]
                     if not eggs:
                         eggs = np.nan
@@ -553,7 +553,7 @@ def format_number(value, digits=1):
 
 ## Nest check data
 
-#aggregate_nestbox_data(pl.Path("Data for students/Nestbox data"))
+aggregate_nestbox_data(pl.Path("Data for students/Nestbox data"))
 
 ## Sensor Data
 # Sensor stuff
