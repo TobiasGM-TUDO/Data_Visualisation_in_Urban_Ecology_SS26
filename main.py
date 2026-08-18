@@ -775,14 +775,15 @@ for metric in ("Eggs", "Chicks", "Deaths"):
         heatmap.add_to(tu_map)
         heatmap_layers.append(heatmap)
 
-
-# Adds a layer control UI element
+# Adds a layer control UI element (tile sets)
 folium.LayerControl(collapsed=False).add_to(tu_map)
-GroupedLayerControl(groups={"Year": years}, exclusive_groups=True).add_to(tu_map)
-GroupedLayerControl(groups={"Heatmaps": heatmap_layers}, exclusive_groups=False).add_to(tu_map)
 
 # Adds a toggle for marker badges
 BadgeToggle(visible={"Orientation", "Markers"}).add_to(tu_map)
+
+# Adds a layer control UI element (year, heatmaps)
+GroupedLayerControl(groups={"Year": years}, exclusive_groups=True).add_to(tu_map)
+GroupedLayerControl(groups={"Heatmaps": heatmap_layers}, exclusive_groups=False).add_to(tu_map)
 
 # Measurement tool
 MeasureControl(
