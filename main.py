@@ -13,6 +13,7 @@ from matplotlib.dates import AutoDateLocator, DateFormatter
 from matplotlib.ticker import MaxNLocator
 from nest_icons import nest_icon, add_nest_css, SPECIES # <- AI
 from badge_toggle import BadgeToggle # <- AI
+from yearly_stats import YearlyStats # <- AI
 import base64 # For favicon
 
 ## Constants
@@ -27,7 +28,7 @@ READINGS = {
          ("RH<sub>in</sub> [%]",   "HI"),
          ("RH<sub>out</sub> [%]",  "HO")),
     ),
-    # "Intelligent": (
+    # "Intelligent": ( # In case I ever add this
     #     "Intelligent sensor readings",
     #     (("T<sub>in</sub> [°C]",  "T"),
     #      ("RH<sub>in</sub> [%]",  "H"),
@@ -553,15 +554,11 @@ def format_number(value, digits=1):
 
 ## Nest check data
 
-aggregate_nestbox_data(pl.Path("Data for students/Nestbox data"))
+#aggregate_nestbox_data(pl.Path("Data for students/Nestbox data"))
 
 ## Sensor Data
 # Sensor stuff
 #aggregate_ibutton_files(pl.Path(IBUTTON_PARENT_DIRECTORY))
-
-
-# Map stuff
-sensor_location = pd.read_excel("nestbox_coordinates.xlsx") # Todo update file with new data (and updates rotation for at least one sensor)
 
 ## Map Stuff
 # Bounding box for relevant map section of TU Dortmund
@@ -680,7 +677,7 @@ for year in years_data:
     for nestbox_metadata in nestbox_df_per_year.itertuples():
         if nestbox_metadata.Type == "iButton":
             nestbox = Nestbox(nestbox_metadata, iButton_data.loc[(nestbox_metadata.ID, nestbox_metadata.Year)])
-        else:
+        else: # Basic nest and currently intelligent nest too
             nestbox = Nestbox(nestbox_metadata)
 
         bird, bird_color = SPECIES.get(nestbox.Species_1, (None, None))
@@ -748,6 +745,17 @@ for year in years_data:
             tags=tags_for_filter,
         ).add_to(year_group)
 
+# Yearly averages
+yearly_stats = {
+    str(int(year)): {
+        "avg": {metric: f"{nestbox_stats_yearly_avg.loc[year, metric]:.1f}"
+                for metric in ("Eggs", "Chicks", "Deaths")},
+        "max": {metric: f"{nestbox_stats_yearly_max.loc[year, metric]:.0f}"
+                for metric in ("Eggs", "Chicks", "Deaths")},
+    }
+    for year in nestbox_stats_yearly_avg.index
+}
+YearlyStats(yearly_stats, initial=2026).add_to(tu_map)
 
 ## Heat maps for general nestbox data
 heatmap_layers = []
