@@ -5,11 +5,11 @@ from folium.template import Template
 BADGES = {
     "Markers": ".nest",
     "Orientation": ".nest-dir",
+    "Label": ".nest-label",
     "Eggs":        ".nest-sw",
     "Chicks":      ".nest-s",
     "Deaths":      ".nest-se",
     "Temperature": ".nest-temp",
-    "Label": ".nest-label"
 }
 
 
