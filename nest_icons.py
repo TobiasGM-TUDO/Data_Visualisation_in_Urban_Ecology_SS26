@@ -33,9 +33,10 @@ CSS_NEST = """
 .nest-dir::before { content:""; position:absolute; left:50%; top:-1px; margin-left:-5px;
               border:5px solid transparent; border-bottom-color:var(--ring); }
 
-.nest-label { position:absolute; left:38px; top:9px; white-space:nowrap;
+.nest-label { position:absolute; left:50%; top:38px; transform:translateX(-50%);
+              white-space:nowrap;
               font:600 11px/1.4 system-ui,sans-serif; color:#222;
-              background:rgba(255,255,255,.85); padding:0 4px; border-radius:2px; }
+              background:rgba(255,255,255,.85); padding:0 4px; border-radius:2px; 
 .nb-tip       { font:12px/1.45 system-ui,sans-serif; color:#222; }
 .nb-head      { font-weight:700; margin-bottom:6px; }
 .nb-tip table { border-collapse:collapse; }

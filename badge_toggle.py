@@ -3,12 +3,13 @@ from folium.template import Template
 
 # label -> CSS selector for the badge it controls
 BADGES = {
-    "Temperature": ".nest-temp",
+    "Markers": ".nest",
+    "Orientation": ".nest-dir",
     "Eggs":        ".nest-sw",
     "Chicks":      ".nest-s",
     "Deaths":      ".nest-se",
-    "Orientation": ".nest-dir",
-    "Markers": ".nest",
+    "Temperature": ".nest-temp",
+    "Label": ".nest-label"
 }
 
 

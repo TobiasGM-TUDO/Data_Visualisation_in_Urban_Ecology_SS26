@@ -737,6 +737,7 @@ for year in years_data:
                 chicks=nestbox.Chicks,
                 dead=nestbox.Deaths,
                 facing=nestbox.Orientation,
+                label=nestbox.ID
             ),
             lazy=True,
             tooltip=folium.Tooltip(nestbox.tooltip, sticky=False),
