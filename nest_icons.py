@@ -36,25 +36,30 @@ CSS_NEST = """
 .nest-label { position:absolute; left:50%; top:38px; transform:translateX(-50%);
               white-space:nowrap;
               font:600 11px/1.4 system-ui,sans-serif; color:#222;
-              background:rgba(255,255,255,.85); padding:0 4px; border-radius:2px; 
+              background:rgba(255,255,255,.85); padding:0 4px; border-radius:2px; }
+
+/* ---- tooltip ------------------------------------------------------------ */
 .nb-tip       { font:12px/1.45 system-ui,sans-serif; color:#222; }
 .nb-head      { font-weight:700; margin-bottom:6px; }
 .nb-tip table { border-collapse:collapse; }
 
+/* width:100% makes the meta table span the whole tooltip, so its right-aligned
+   values stay flush with the right edge even when the readings table below is
+   what sets the tooltip width. */
 .nb-meta      { width:100%; }
 .nb-meta th   { text-align:left;  font-weight:400; color:#555; padding:1px 10px 1px 0; white-space:nowrap; }
 .nb-meta td   { text-align:right; padding:1px 0; font-variant-numeric:tabular-nums; }
 
 .nb-caption     { margin:8px 0 3px; padding-top:6px; border-top:1px solid rgba(0,0,0,.15); color:#555; }
-.nb-readings th { font-weight:400; color:#555; text-align:right; padding:1px 0 1px 8px; }
-.nb-readings td { text-align:right; padding:1px 0 1px 8px; font-variant-numeric:tabular-nums; }
+.nb-readings th { font-weight:400; color:#555; text-align:right; padding:1px 0 1px 16px; }
+.nb-readings td { text-align:right; padding:1px 0 1px 16px; font-variant-numeric:tabular-nums; }
 .nb-readings tr th:first-child,
 .nb-readings tr td:first-child { text-align:left; padding-left:0; white-space:nowrap; }
 .nb-group th    { text-align:center; padding-bottom:2px; }
 
-.nb-readings .nb-night { border-left:1px solid rgba(0,0,0,.15); padding-left:14px; }
+.nb-readings .nb-night { border-left:1px solid rgba(0,0,0,.15); padding-left:18px; }
 .nb-readings td:nth-child(4),
-.nb-readings tr:not(.nb-group) th:nth-child(4) { padding-right:14px; }
+.nb-readings tr:not(.nb-group) th:nth-child(4) { padding-right:18px; }
 </style>
 """
 
