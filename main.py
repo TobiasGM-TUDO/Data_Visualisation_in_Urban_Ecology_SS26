@@ -665,7 +665,7 @@ iButton_data = iButton_data.set_index(["ID", "Year"]).sort_index()
 
 # For coloring the temperature badges
 temp_means = iButton_data[iButton_data["Variable"].isin(("TI", "TO")) & iButton_data["Timestamp"].dt.hour.between(DAY_START, DAY_END)].groupby(["ID", "Year", "Variable"])["Value"].mean()
-temp_domain = tuple(temp_means.agg(["min", "max"]))
+temp_domain = tuple(temp_means.quantile([0.01, 0.99]))
 
 years = []
 for year in years_data:
