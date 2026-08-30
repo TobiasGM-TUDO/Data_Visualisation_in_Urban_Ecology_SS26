@@ -1,5 +1,5 @@
 # What is this?
-This is an interactive map of the TU Dortmund campus and all nest boxes on it. It serves as my project for the "Data Visualisation in Urban Ecology" course in 2026.
+This is an interactive map of the TU Dortmund university campus and all nest boxes on it. It serves as my project for the "Data Visualisation in Urban Ecology" course in 2026.
 
 This repository contains all the code used for generating the map as well as the aggregated data that has been used to draw map elements like markers, marker badges, tool-tips and pop-ups.
 The aggregated iButton metrics are too large to upload here on GitHub. They can be found on Sciebo instead -> [Sciebo](https://tu-dortmund.sciebo.de/s/foAPEd4XdJqWdMZ) (Password: "birdie")
